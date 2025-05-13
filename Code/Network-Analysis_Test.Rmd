@@ -20,8 +20,10 @@ library(qgraph)
 
 ```{r}
 demo_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_p_demo.csv')
-age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv')
-upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_upps.csv')
+age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv') %>% 
+  select(src_subject_id, eventname, interview_age)
+upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_upps.csv') %>%
+  left_join(age_data, by = join_by(src_subject_id, eventname))
 sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv')
 ```
 
@@ -72,19 +74,15 @@ sleep_data_clean <- sleep_data %>% rename(
 
 clean_data <- function(df, timepoint) {
   df %>%
-    filter(eventname == !timepoint) %>%
+    filter(eventname == timepoint) %>%
     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
-    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
-    left_join(age_data, by = join_by(src_subject_id, eventname), keep = interview_age)
-  drop_na(any_of(interview_age, sex, race_ethnicity, demo_prnt_marital_v2, demo_prnt_ed_v2, demo_prnt_empl_v2, demo_prnt_income_v2))
+    select(src_subject_id, eventname, negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
+    drop_na(any_of(c('interview_age', 'sex', 'race_ethnicity', 'demo_prnt_marital_v2', 'demo_prnt_ed_v2', 'demo_prnt_empl_v2', 'demo_prnt_income_v2')))
 }
 
-baseline_data <- upps_data_clean %>%
-    filter(eventname == 'baseline_year_1_arm_1') %>%
-    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
-    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
-  drop_na(any_of())
+baseline_data <- clean_data(upps_data_clean, 'baseline_year_1_arm_1')
 
+###
 baseline_data_summed <- upps_data_clean %>%
     filter(eventname == 'baseline_year_1_arm_1') %>%
     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
