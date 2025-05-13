@@ -1,0 +1,167 @@
+---
+title: "Chelsea Models"
+author: "Bryan Chen"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: 
+---
+
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, messAge=FALSE, warning=FALSE)
+
+library(tidyverse)
+library(openxlsx)
+library(ggplot2)
+library(bootnet)
+library(qgraph)
+```
+
+```{r}
+demo_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_p_demo.csv')
+age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv')
+upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_upps.csv')
+sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv')
+```
+
+## Clean
+```{r}
+# https://nda.nih.gov/data-structure/pdem02
+# https://nda.nih.gov/data-structure/abcd_sds01
+# https://nda.nih.gov/data-structure/abcd_mhy02
+# https://nda.nih.gov/data-structure/abcd_upps01
+
+upps_data_clean <- upps_data %>% rename(
+    negative_urgency = upps_y_ss_negative_urgency,
+    lack_of_perseverance = upps_y_ss_lack_of_perseverance,
+    lack_of_planning = upps_y_ss_lack_of_planning,
+    sensation_seeking = upps_y_ss_sensation_seeking,
+    positive_urgency = upps_y_ss_positive_urgency
+)
+  
+  
+sleep_data_clean <- sleep_data %>% rename(
+    duration = sleepdisturb1_p,
+    delay_i = sleepdisturb2_p,
+    reluctance_i = sleepdisturb3_p,
+    difficulty_i = sleepdisturb4_p,
+    fear_i = sleepdisturb5_p,
+    jerk_i = sleepdisturb6_p,
+    repetitive_i = sleepdisturb7_p,
+    dream_i = sleepdisturb8_p,
+    sweat_i = sleepdisturb9_p,
+    wake_m = sleepdisturb10_p,
+    back_asleep_i = sleepdisturb11_p,
+    jerk_m = sleepdisturb12_p,
+    breath_difficulty_m = sleepdisturb13_p,
+    breath_unable_m = sleepdisturb14_p,
+    snore_m = sleepdisturb15_p,
+    sweat_m = sleepdisturb16_p,
+    sleepwalking_m = sleepdisturb17_p,
+    sleeptalking_m = sleepdisturb18_p,
+    teethgrind_m = sleepdisturb19_p,
+    scream_m = sleepdisturb20_p,
+    nightmares_m = sleepdisturb21_p,
+    morningwake = sleepdisturb22_p,
+    morningtired = sleepdisturb23_p,
+    morningparalysis = sleepdisturb24_p,
+    daytimesleepiness = sleepdisturb25_p,
+    narcolepsy = sleepdisturb26_p
+)
+
+clean_data <- function(df, timepoint) {
+  df %>%
+    filter(eventname == !timepoint) %>%
+    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
+    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
+    left_join(age_data, by = join_by(src_subject_id, eventname), keep = interview_age)
+  drop_na(any_of(interview_age, sex, race_ethnicity, demo_prnt_marital_v2, demo_prnt_ed_v2, demo_prnt_empl_v2, demo_prnt_income_v2))
+}
+
+baseline_data <- upps_data_clean %>%
+    filter(eventname == 'baseline_year_1_arm_1') %>%
+    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
+    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
+  drop_na(any_of())
+
+baseline_data_summed <- upps_data_clean %>%
+    filter(eventname == 'baseline_year_1_arm_1') %>%
+    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
+    rowwise() %>%
+    mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
+    mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
+```
+
+## Descriptives
+```{r, results='asis'}
+# summary(tableby(isAD~Age + Gender + Education + das_executive_v2+das_emotional_v2+das_behavior_cognitive_v2 + das_total_v2 + gds_total +
+#                  updrs_Total + FAStotal + `DX:`, alldata))
+
+
+```
+
+## Test Network
+```{r}
+network <- baseline_data %>%
+    estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
+
+network_summed <- baseline_data_summed %>%
+    estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
+
+bootnet_nonpar <- bootnet(network,
+                          nBoots =  1000,
+                          nCores = 8)
+
+bootnet_nonpar_summed <- bootnet(network_summed,
+                          nBoots =  1000,
+                          nCores = 8)
+
+
+
+
+plot(network, 
+     layout = "spring",
+     # groups = traits,
+     label.cex = 0.7, # scalar on label size
+     label.color = 'black', # string on label colors
+     label.prop = 2, # proportion of the width of the node that the label scales
+     
+     # Edges (pp. 33-34)
+     negDashed = T, # should negative edges be dashed?
+     
+     # Legend (p. 35-36)
+     legend.cex = 0.27, # scalar of the legend
+     legend.mode = 'style2', # default is 'style1'
+     # nodeNames = items, # names for each node to plot in legend
+     
+     # Generical graphical arguments (p. 36)
+     font = 2)
+
+plot(network_summed, 
+     layout = "spring",
+     # groups = traits,
+     label.cex = 0.7, # scalar on label size
+     label.color = 'black', # string on label colors
+     label.prop = 2, # proportion of the width of the node that the label scales
+     
+     # Edges (pp. 33-34)
+     negDashed = T, # should negative edges be dashed?
+     
+     # Legend (p. 35-36)
+     legend.cex = 0.27, # scalar of the legend
+     legend.mode = 'style2', # default is 'style1'
+     # nodeNames = items, # names for each node to plot in legend
+     
+     # Generical graphical arguments (p. 36)
+     font = 2)
+
+
+plot(bootnet_nonpar, labels = FALSE, order = 'sample')
+plot(bootnet_nonpar_summed, labels = FALSE, order = 'sample')
+
+centralityPlot(network, include = "all", orderBy = "ExpectedInfluence")
+centralityPlot(network_summed, include = "all", orderBy = "ExpectedInfluence")
+
+```
