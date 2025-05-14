@@ -23,7 +23,10 @@ demo_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Researc
 age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv') %>% 
   select(src_subject_id, eventname, interview_age)
 upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_upps.csv') %>%
-  left_join(age_data, by = join_by(src_subject_id, eventname))
+  left_join(age_data, by = join_by(src_subject_id, eventname)) %>%
+  group_by(src_subject_id) %>%
+  filter(n() == 3) %>%
+  ungroup()
 sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv')
 ```
 
@@ -73,23 +76,38 @@ sleep_data_clean <- sleep_data %>% rename(
 )
 
 clean_data <- function(df, timepoint) {
+  upps_questions <- c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'delay_i', 'reluctance_i', 'difficulty_i', 'fear_i', 'jerk_i', 'repetitive_i', 'dream_i', 'sweat_i', 'wake_m', 'back_asleep_i', 'jerk_m', 'breath_difficulty_m', 'breath_unable_m', 'snore_m', 'sweat_m', 'sleepwalking_m', 'sleeptalking_m', 'teethgrind_m', 'scream_m', 'nightmares_m', 'morningwake', 'morningtired', 'morningparalysis', 'daytimesleepiness', 'narcolepsy')
+  
   df %>%
     filter(eventname == timepoint) %>%
     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
-    select(src_subject_id, eventname, negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, delay_i, reluctance_i, difficulty_i, fear_i, jerk_i, repetitive_i, dream_i, sweat_i, wake_m, back_asleep_i, jerk_m, breath_difficulty_m, breath_unable_m, snore_m, sweat_m, sleepwalking_m, sleeptalking_m, teethgrind_m, scream_m, nightmares_m, morningwake, morningtired, morningparalysis, daytimesleepiness, narcolepsy) %>%
-    drop_na(any_of(c('interview_age', 'sex', 'race_ethnicity', 'demo_prnt_marital_v2', 'demo_prnt_ed_v2', 'demo_prnt_empl_v2', 'demo_prnt_income_v2')))
+    select(src_subject_id, any_of(upps_questions)) %>%
+    drop_na(any_of(c('interview_age', 'sex', 'race_ethnicity', 'demo_prnt_marital_v2', 'demo_prnt_ed_v2', 'demo_prnt_empl_v2', 'demo_prnt_income_v2'))) %>%
+    drop_na(any_of(upps_questions))
 }
 
 baseline_data <- clean_data(upps_data_clean, 'baseline_year_1_arm_1')
+year2_FU <- clean_data(upps_data_clean, '2_year_follow_up_y_arm_1')
+year4_FU <- clean_data(upps_data_clean, '4_year_follow_up_y_arm_1')
+
+common_ids <- Reduce(intersect, list(baseline_data$src_subject_id, year2_FU$src_subject_id, year4_FU$src_subject_id))
+
+baseline_data <- baseline_data[baseline_data$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
+year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
+year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
+
 
 ###
-baseline_data_summed <- upps_data_clean %>%
-    filter(eventname == 'baseline_year_1_arm_1') %>%
-    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
-    rowwise() %>%
-    mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
-    mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
+# baseline_data_summed <- upps_data_clean %>%
+#     filter(eventname == 'baseline_year_1_arm_1') %>%
+#     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
+#     rowwise() %>%
+#     mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
+#     mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+#     select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
 ```
 
 ## Descriptives
@@ -102,24 +120,15 @@ baseline_data_summed <- upps_data_clean %>%
 
 ## Test Network
 ```{r}
-network <- baseline_data %>%
+draw_graph <- function(df) {
+  network <- df %>%
     estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
 
-network_summed <- baseline_data_summed %>%
-    estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
-
-bootnet_nonpar <- bootnet(network,
+  bootnet_nonpar <- bootnet(network,
                           nBoots =  1000,
                           nCores = 8)
 
-bootnet_nonpar_summed <- bootnet(network_summed,
-                          nBoots =  1000,
-                          nCores = 8)
-
-
-
-
-plot(network, 
+  plot(network, 
      layout = "spring",
      # groups = traits,
      label.cex = 0.7, # scalar on label size
@@ -137,29 +146,12 @@ plot(network,
      # Generical graphical arguments (p. 36)
      font = 2)
 
-plot(network_summed, 
-     layout = "spring",
-     # groups = traits,
-     label.cex = 0.7, # scalar on label size
-     label.color = 'black', # string on label colors
-     label.prop = 2, # proportion of the width of the node that the label scales
-     
-     # Edges (pp. 33-34)
-     negDashed = T, # should negative edges be dashed?
-     
-     # Legend (p. 35-36)
-     legend.cex = 0.27, # scalar of the legend
-     legend.mode = 'style2', # default is 'style1'
-     # nodeNames = items, # names for each node to plot in legend
-     
-     # Generical graphical arguments (p. 36)
-     font = 2)
+  plot(bootnet_nonpar, labels = FALSE, order = 'sample')
 
+  centralityPlot(network, include = "all", orderBy = "ExpectedInfluence")
+}
 
-plot(bootnet_nonpar, labels = FALSE, order = 'sample')
-plot(bootnet_nonpar_summed, labels = FALSE, order = 'sample')
-
-centralityPlot(network, include = "all", orderBy = "ExpectedInfluence")
-centralityPlot(network_summed, include = "all", orderBy = "ExpectedInfluence")
-
+draw_graph(baseline_data)
+draw_graph(year2_FU)
+draw_graph(year4_FU)
 ```
