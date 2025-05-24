@@ -1,0 +1,115 @@
+---
+title: "Chelsea Models"
+author: "Bryan Chen"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: 
+---
+
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, messAge=FALSE, warning=FALSE)
+
+library(tidyverse)
+library(openxlsx)
+library(ggplot2)
+library(bootnet)
+library(qgraph)
+library(lavaan)
+library(glmnet)
+```
+
+```{r}
+load('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processedData.RData')
+```
+
+## Descriptives
+```{r, results='asis'}
+# summary(tableby(isAD~Age + Gender + Education + das_executive_v2+das_emotional_v2+das_behavior_cognitive_v2 + das_total_v2 + gds_total +
+#                  updrs_Total + FAStotal + `DX:`, alldata))
+
+
+```
+
+## Test Rhemtulla Network
+```{r}
+getAdjMatList <- function(designMat, data) {
+  numCovar <- 6
+  k <- 31
+  
+  AdjMatList <- NULL
+  lambdaList <- NULL
+  
+  for (i in 1:k) {
+    predictors <- as.matrix(data[, designMat[, i]])
+    
+    adjMat <- matrix(0, k, k)
+    colnames(adjMat) <- designMat[, (i+1)]
+    rownames(adjMat) <- colnames(predictors)
+    
+    lambdaVec <- rep(0,k)
+    
+    for (j in 1:k) {
+      set.seed(1)
+      lassoreg <- cv.glmnet(x = predictors,
+                            y = data[, designMat[i, t+1]],
+                            family = 'gaussian',
+                            alpha = 1,
+                            standardize = TRUE)
+      lambdaVec[j] <- lassoreg$lambda.min
+      adjMat[1:k, j] <- coef(lassoreg, s = lambdaVec[j], exact = FALSE)[2:(k+1)]
+    }
+    
+    AdjMatList[[i]] <- adjMat
+    lambdaList[[i]] <- lambdaVec
+  }
+  return(list(B = AdjMatList, lambdas = lambdaList))
+}
+
+designMat <- matrix(colnames(baseline_data),
+                    nrow = 31,
+                    ncol = 3,
+                    byrow = FALSE)
+
+glmModel <- getAdjMatList(designMat, baseline_data)
+
+```
+
+## Test Network
+```{r}
+draw_graph <- function(df) {
+  network <- df %>%
+    estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
+
+  bootnet_nonpar <- bootnet(network,
+                          nBoots =  1000,
+                          nCores = 8)
+
+  plot(network, 
+     layout = "spring",
+     # groups = traits,
+     label.cex = 0.7, # scalar on label size
+     label.color = 'black', # string on label colors
+     label.prop = 2, # proportion of the width of the node that the label scales
+     
+     # Edges (pp. 33-34)
+     negDashed = T, # should negative edges be dashed?
+     
+     # Legend (p. 35-36)
+     legend.cex = 0.27, # scalar of the legend
+     legend.mode = 'style2', # default is 'style1'
+     # nodeNames = items, # names for each node to plot in legend
+     
+     # Generical graphical arguments (p. 36)
+     font = 2)
+
+  plot(bootnet_nonpar, labels = FALSE, order = 'sample')
+
+  centralityPlot(network, include = "all", orderBy = "ExpectedInfluence")
+}
+
+draw_graph(baseline_data)
+draw_graph(year2_FU)
+draw_graph(year4_FU)
+```

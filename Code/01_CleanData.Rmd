@@ -1,23 +1,19 @@
 ---
-title: "Chelsea Models"
-author: "Bryan Chen"
+title: "01_CleanData"
+author: "Bryan"
 date: "`r Sys.Date()`"
-output: 
-  html_document:
-    code_folding: 
+output: html_document
 ---
 
-
-```{r include = FALSE}
-knitr::opts_chunk$set(echo = TRUE, messAge=FALSE, warning=FALSE)
+## Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(openxlsx)
-library(ggplot2)
-library(bootnet)
-library(qgraph)
 ```
 
+## Load data
 ```{r}
 demo_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_p_demo.csv')
 age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv') %>% 
@@ -25,7 +21,7 @@ age_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research
 upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_upps.csv') %>%
   left_join(age_data, by = join_by(src_subject_id, eventname)) %>%
   group_by(src_subject_id) %>%
-  filter(n() == 3) %>%
+  filter(n() == 3) %>% # Only keep those with all three timepoints
   ungroup()
 sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv')
 ```
@@ -92,13 +88,18 @@ year4_FU <- clean_data(upps_data_clean, '4_year_follow_up_y_arm_1')
 
 common_ids <- Reduce(intersect, list(baseline_data$src_subject_id, year2_FU$src_subject_id, year4_FU$src_subject_id))
 
-baseline_data <- baseline_data[baseline_data$src_subject_id %in% common_ids, ] %>%
-  select(!src_subject_id)
-year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] %>%
-  select(!src_subject_id)
-year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] %>%
-  select(!src_subject_id)
+baseline_data <- baseline_data[baseline_data$src_subject_id %in% common_ids, ] #%>%
+  #select(!src_subject_id)
+year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] #%>%
+  #select(!src_subject_id)
+year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] #%>%
+  #select(!src_subject_id)
 
+full_data <- baseline_data %>%
+    left_join(year2_FU, by = 'src_subject_id', suffix = c('.1', '.2')) %>%
+    left_join(year4_FU, by = 'src_subject_id', suffix = c('.3'))
+
+save(baseline_data, year2_FU, year4_FU, file = '/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processedData.RData')
 
 ###
 # baseline_data_summed <- upps_data_clean %>%
@@ -108,50 +109,4 @@ year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] %>%
 #     mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
 #     mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
 #     select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
-```
-
-## Descriptives
-```{r, results='asis'}
-# summary(tableby(isAD~Age + Gender + Education + das_executive_v2+das_emotional_v2+das_behavior_cognitive_v2 + das_total_v2 + gds_total +
-#                  updrs_Total + FAStotal + `DX:`, alldata))
-
-
-```
-
-## Test Network
-```{r}
-draw_graph <- function(df) {
-  network <- df %>%
-    estimateNetwork(default = 'EBICglasso', corMethod = 'spearman')
-
-  bootnet_nonpar <- bootnet(network,
-                          nBoots =  1000,
-                          nCores = 8)
-
-  plot(network, 
-     layout = "spring",
-     # groups = traits,
-     label.cex = 0.7, # scalar on label size
-     label.color = 'black', # string on label colors
-     label.prop = 2, # proportion of the width of the node that the label scales
-     
-     # Edges (pp. 33-34)
-     negDashed = T, # should negative edges be dashed?
-     
-     # Legend (p. 35-36)
-     legend.cex = 0.27, # scalar of the legend
-     legend.mode = 'style2', # default is 'style1'
-     # nodeNames = items, # names for each node to plot in legend
-     
-     # Generical graphical arguments (p. 36)
-     font = 2)
-
-  plot(bootnet_nonpar, labels = FALSE, order = 'sample')
-
-  centralityPlot(network, include = "all", orderBy = "ExpectedInfluence")
-}
-
-draw_graph(baseline_data)
-draw_graph(year2_FU)
-draw_graph(year4_FU)
 ```
