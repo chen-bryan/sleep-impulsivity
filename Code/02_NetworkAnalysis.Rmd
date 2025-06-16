@@ -35,28 +35,31 @@ load('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processed
 
 ## Longitudinal Network
 ```{r}
+DIS <- c('delay_DIMS', 'reluctance_DIMS', 'difficulty_DIMS', 'fear_DIMS')
+DMS <- c('wake_DIMS', 'back_asleep_DIMS')
+  
 baseline_data_summed <- baseline_data %>%
   rowwise() %>%
-  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
-  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
+  mutate(DIS = sum(c_across(all_of(DIS)))) %>%
+  mutate(DMS = sum(c_across(all_of(DMS)))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, DIS, DMS)
 
 year2_FU_summed <- year2_FU %>%
   rowwise() %>%
-  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
-  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
+  mutate(DIS = sum(c_across(all_of(DIS)))) %>%
+  mutate(DMS = sum(c_across(all_of(DMS)))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, DIS, DMS)
 
 year4_FU_summed <- year4_FU %>%
   rowwise() %>%
-  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
-  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
+  mutate(DIS = sum(c_across(all_of(DIS)))) %>%
+  mutate(DMS = sum(c_across(all_of(DMS)))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, DIS, DMS)
 
 type = rep('g', 8) # Treating as quasi-continuous
 level = rep(1, 8)
 
-baseline_matrix = data.matrix(baseline_data_summed)
+baseline_matrix = data.matrix(baseline_data_summed) %>% scale()
 baseline_network = mgm(data = baseline_matrix,
                        type = type,
                        level = level,
@@ -66,7 +69,7 @@ baseline_network = mgm(data = baseline_matrix,
                        ruleReg = 'AND',
                        pbar = FALSE)
 
-year2_matrix = data.matrix(year2_FU_summed)
+year2_matrix = data.matrix(year2_FU_summed) %>% scale()
 year2_network = mgm(data = year2_matrix,
                     type = type,
                     level = level,
@@ -76,7 +79,7 @@ year2_network = mgm(data = year2_matrix,
                     ruleReg = 'AND',
                     pbar = FALSE)
 
-year4_matrix = data.matrix(year4_FU_summed)
+year4_matrix = data.matrix(year4_FU_summed) %>% scale()
 year4_network = mgm(data = year4_matrix,
                     type = type,
                     level = level,
@@ -105,7 +108,7 @@ baseline_predict$R2_CC = ifelse(!is.na(baseline_predict$R2), baseline_predict$R2
 year2_predict$R2_CC = ifelse(!is.na(year2_predict$R2), year2_predict$R2, year2_predict$CC)
 year4_predict$R2_CC = ifelse(!is.na(year4_predict$R2), year4_predict$R2, year4_predict$CC)
 
-groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
+groups = append(rep('UPPS', 5), rep('SDSC', 3)) %>% factor
 p_baseline = qgraph(baseline_network$pairwise$wadj,
              vsize = 8,
              layout = "spring",
@@ -170,9 +173,9 @@ for (i in 1:k) {
 }
 
 # Plot
-groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
-labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
-node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+groups = append(rep('UPPS', 5), rep('SDSC', 3)) %>% factor
+labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
+node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
 
 # diag(adjMat) = 0
 
@@ -216,9 +219,9 @@ for (i in 1:k) {
 }
 
 # Plot
-groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
-labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
-node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+groups = append(rep('UPPS', 5), rep('SDSC', 2)) %>% factor
+labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
+node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
 
 # diag(adjMat) = 0
 
@@ -238,4 +241,72 @@ test_fig = qgraph(adjMat,
 
 centrality(test_fig)
 centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
+```
+
+## Testing Confirmatory Factor Analysis
+```{r}
+library(psych)
+library(lavaan)
+sleep_baseline_data <- baseline_data[, 7:ncol(baseline_data)]
+
+fa.parallel(sleep_baseline_data, fm = "minres", fa = "fa")
+efa_result <- fa(sleep_baseline_data, nfactors = 8, rotate = "oblimin", fm = "minres")
+print(efa_result$loadings, cutoff = 0.3)
+
+efa_result <- fa(sleep_baseline_data, nfactors = 7, rotate = "oblimin", fm = "minres")
+print(efa_result$loadings, cutoff = 0.3)
+
+efa_result <- fa(sleep_baseline_data, nfactors = 6, rotate = "oblimin", fm = "minres")
+print(efa_result$loadings, cutoff = 0.3)
+
+# efa_result <- fa(sleep_baseline_data, nfactors = 5, rotate = "oblimin", fm = "minres")
+# print(efa_result$loadings, cutoff = 0.3)
+
+# efa_result <- efa(sleep_baseline_data, nfactors = 1:8, rotation = 'oblimin')
+# summary(efa_result)
+
+# 7-factor model (split DIMS into DIS and DMS)
+model_7f <- '
+  DIS =~ delay_DIMS + reluctance_DIMS + difficulty_DIMS + fear_DIMS
+  DMS =~ wake_DIMS + back_asleep_DIMS
+  SBD =~ breath_difficulty + breath_unable + snore
+  DOA =~ sleepwalking + scream + nightmares
+  SWTD =~ jerk_i + repetitive + dream + jerk_m + sleeptalking + teethgrind
+  DOES =~ morningwake + morningtired + morningparalysis + daytimesleepiness + narcolepsy
+  SH =~ sweat_i + sweat_m
+'
+
+# 6-factor model (original Bruni)
+model_6f <- '
+  DIMS =~ delay_DIMS + reluctance_DIMS + difficulty_DIMS + fear_DIMS + wake_DIMS + back_asleep_DIMS
+  SBD =~ breath_difficulty + breath_unable + snore
+  DOA =~ sleepwalking + scream + nightmares
+  SWTD =~ jerk_i + repetitive + dream + jerk_m + sleeptalking + teethgrind
+  DOES =~ morningwake + morningtired + morningparalysis + daytimesleepiness + narcolepsy
+  SH =~ sweat_i + sweat_m
+'
+
+# List of ordered variables (assuming all are ordinal)
+ordered_items <- c('delay_DIMS', 'reluctance_DIMS', 'difficulty_DIMS', 'fear_DIMS',
+                   'wake_DIMS', 'back_asleep_DIMS', 'breath_difficulty', 'breath_unable',
+                   'snore', 'sleepwalking', 'sleeptalking', 'scream', 'jerk_i',
+                   'repetitive', 'dream', 'sweat_i', 'sweat_m', 'teethgrind', 'morningwake', 'morningtired',
+                   'morningparalysis', 'daytimesleepiness', 'narcolepsy')
+
+# Fit both models
+fit_7f <- cfa(model_7f, data = sleep_baseline_data, ordered = ordered_items, estimator = "WLSMV")
+fit_6f <- cfa(model_6f, data = sleep_baseline_data, ordered = ordered_items, estimator = "WLSMV")
+
+# Summarize fit
+summary(fit_7f, fit.measures = TRUE, standardized = TRUE)
+summary(fit_6f, fit.measures = TRUE, standardized = TRUE)
+
+fitMeasures(fit_7f, c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr"))
+fitMeasures(fit_6f, c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr"))
+
+# Compare fit (only valid for nested models)
+lavTestLRT(fit_7f, fit_6f)
+
+diagram(efa_result, sort = TRUE, cut = 0.3, cex = 0.5)
+diagram(efa_result, sort = TRUE, cut = 0.3, cex = 1)
 ```

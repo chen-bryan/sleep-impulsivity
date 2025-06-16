@@ -23,7 +23,8 @@ upps_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Researc
   group_by(src_subject_id) %>%
   filter(n() == 3) %>% # Only keep those with all three timepoints
   ungroup()
-sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv')
+sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/abcd-data-release-5.1/core/physical-health/ph_p_sds.csv') %>%
+  mutate(sleepdisturb1_p = 6 - sleepdisturb1_p) # Reverse coding
 ```
 
 ## Clean
@@ -43,26 +44,26 @@ upps_data_clean <- upps_data %>% rename(
   
 sleep_data_clean <- sleep_data %>% rename(
     duration = sleepdisturb1_p,
-    delay_i = sleepdisturb2_p,
-    reluctance_i = sleepdisturb3_p,
-    difficulty_i = sleepdisturb4_p,
-    fear_i = sleepdisturb5_p,
+    delay_DIMS = sleepdisturb2_p,
+    reluctance_DIMS = sleepdisturb3_p,
+    difficulty_DIMS = sleepdisturb4_p,
+    fear_DIMS = sleepdisturb5_p,
     jerk_i = sleepdisturb6_p,
-    repetitive_i = sleepdisturb7_p,
-    dream_i = sleepdisturb8_p,
+    repetitive = sleepdisturb7_p,
+    dream = sleepdisturb8_p,
     sweat_i = sleepdisturb9_p,
-    wake_m = sleepdisturb10_p,
-    back_asleep_i = sleepdisturb11_p,
+    wake_DIMS = sleepdisturb10_p,
+    back_asleep_DIMS = sleepdisturb11_p,
     jerk_m = sleepdisturb12_p,
-    breath_difficulty_m = sleepdisturb13_p,
-    breath_unable_m = sleepdisturb14_p,
-    snore_m = sleepdisturb15_p,
+    breath_difficulty = sleepdisturb13_p,
+    breath_unable = sleepdisturb14_p,
+    snore = sleepdisturb15_p,
     sweat_m = sleepdisturb16_p,
-    sleepwalking_m = sleepdisturb17_p,
-    sleeptalking_m = sleepdisturb18_p,
-    teethgrind_m = sleepdisturb19_p,
-    scream_m = sleepdisturb20_p,
-    nightmares_m = sleepdisturb21_p,
+    sleepwalking = sleepdisturb17_p,
+    sleeptalking = sleepdisturb18_p,
+    teethgrind = sleepdisturb19_p,
+    scream = sleepdisturb20_p,
+    nightmares = sleepdisturb21_p,
     morningwake = sleepdisturb22_p,
     morningtired = sleepdisturb23_p,
     morningparalysis = sleepdisturb24_p,
@@ -71,13 +72,13 @@ sleep_data_clean <- sleep_data %>% rename(
 )
 
 clean_data <- function(df, timepoint) {
-  upps_questions <- c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'delay_i', 'reluctance_i', 'difficulty_i', 'fear_i', 'jerk_i', 'repetitive_i', 'dream_i', 'sweat_i', 'wake_m', 'back_asleep_i', 'jerk_m', 'breath_difficulty_m', 'breath_unable_m', 'snore_m', 'sweat_m', 'sleepwalking_m', 'sleeptalking_m', 'teethgrind_m', 'scream_m', 'nightmares_m', 'morningwake', 'morningtired', 'morningparalysis', 'daytimesleepiness', 'narcolepsy')
+  upps_questions <- c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'delay_DIMS', 'reluctance_DIMS', 'difficulty_DIMS', 'fear_DIMS', 'jerk_i', 'repetitive', 'dream', 'sweat_i', 'wake_DIMS', 'back_asleep_DIMS', 'jerk_m', 'breath_difficulty', 'breath_unable', 'snore', 'sweat_m', 'sleepwalking', 'sleeptalking', 'teethgrind', 'scream', 'nightmares', 'morningwake', 'morningtired', 'morningparalysis', 'daytimesleepiness', 'narcolepsy')
   
   df %>%
     filter(eventname == timepoint) %>%
     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
     select(src_subject_id, any_of(upps_questions)) %>%
-    drop_na(any_of(c('interview_age', 'sex', 'race_ethnicity', 'demo_prnt_marital_v2', 'demo_prnt_ed_v2', 'demo_prnt_empl_v2', 'demo_prnt_income_v2'))) %>%
+    # drop_na(any_of(c('interview_age', 'sex', 'race_ethnicity', 'demo_prnt_marital_v2', 'demo_prnt_ed_v2', 'demo_prnt_empl_v2', 'demo_prnt_income_v2'))) %>%
     drop_na(any_of(upps_questions))
 }
 
@@ -87,12 +88,12 @@ year4_FU <- clean_data(upps_data_clean, '4_year_follow_up_y_arm_1')
 
 common_ids <- Reduce(intersect, list(baseline_data$src_subject_id, year2_FU$src_subject_id, year4_FU$src_subject_id))
 
-baseline_data <- baseline_data[baseline_data$src_subject_id %in% common_ids, ] #%>%
-  #select(!src_subject_id)
-year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] #%>%
-  #select(!src_subject_id)
-year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] #%>%
-  #select(!src_subject_id)
+baseline_data <- baseline_data[baseline_data$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
+year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
+year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] %>%
+  select(!src_subject_id)
 
 save(baseline_data, year2_FU, year4_FU, file = '/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processedData.RData')
 
