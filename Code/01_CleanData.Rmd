@@ -32,7 +32,6 @@ sleep_data = read.csv('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Resear
 # https://nda.nih.gov/data-structure/abcd_sds01
 # https://nda.nih.gov/data-structure/abcd_mhy02
 # https://nda.nih.gov/data-structure/abcd_upps01
-
 upps_data_clean <- upps_data %>% rename(
     negative_urgency = upps_y_ss_negative_urgency,
     lack_of_perseverance = upps_y_ss_lack_of_perseverance,
@@ -95,18 +94,14 @@ year2_FU <- year2_FU[year2_FU$src_subject_id %in% common_ids, ] #%>%
 year4_FU <- year4_FU[year4_FU$src_subject_id %in% common_ids, ] #%>%
   #select(!src_subject_id)
 
-full_data <- baseline_data %>%
-    left_join(year2_FU, by = 'src_subject_id', suffix = c('.1', '.2')) %>%
-    left_join(year4_FU, by = 'src_subject_id', suffix = c('.3'))
-
 save(baseline_data, year2_FU, year4_FU, file = '/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processedData.RData')
 
 ###
-# baseline_data_summed <- upps_data_clean %>%
-#     filter(eventname == 'baseline_year_1_arm_1') %>%
-#     left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
-#     rowwise() %>%
-#     mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
-#     mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-#     select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
+baseline_data_summed <- upps_data_clean %>%
+    filter(eventname == 'baseline_year_1_arm_1') %>%
+    left_join(sleep_data_clean, by = join_by(src_subject_id, eventname)) %>% #inclusion of eventname filters baseline data for both
+    rowwise() %>%
+    mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>% #sums across selected measures
+    mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+    select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
 ```

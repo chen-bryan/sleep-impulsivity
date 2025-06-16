@@ -17,6 +17,7 @@ library(ggplot2)
 library(bootnet)
 library(qgraph)
 library(lavaan)
+library(mgm)
 library(glmnet)
 ```
 
@@ -34,47 +35,112 @@ load('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processed
 
 ## Test Rhemtulla Network
 ```{r}
-getAdjMatList <- function(designMat, data) {
-  numCovar <- 6
-  k <- 31
-  
+
+getAdjMatList <- function(designMat, data){
   AdjMatList <- NULL
   lambdaList <- NULL
+  k <- nrow(designMat)
   
-  for (i in 1:k) {
-    predictors <- as.matrix(data[, designMat[, i]])
+  for (t in 1:(ncol(designMat) -1)){
+    
+    predictors <- as.matrix(data[, designMat[, t]])
     
     adjMat <- matrix(0, k, k)
-    colnames(adjMat) <- designMat[, (i+1)]
+    colnames(adjMat) <- designMat[, (t+1)]
     rownames(adjMat) <- colnames(predictors)
     
     lambdaVec <- rep(0,k)
-    
-    for (j in 1:k) {
-      set.seed(1)
-      lassoreg <- cv.glmnet(x = predictors,
-                            y = data[, designMat[i, t+1]],
-                            family = 'gaussian',
-                            alpha = 1,
-                            standardize = TRUE)
-      lambdaVec[j] <- lassoreg$lambda.min
-      adjMat[1:k, j] <- coef(lassoreg, s = lambdaVec[j], exact = FALSE)[2:(k+1)]
+      
+    for (i in 1:k){
+      
+      set.seed(100)
+      lassoreg <- cv.glmnet(x = predictors, 
+                            y = data[, designMat[i , t+1 ]], 
+                            family = "gaussian", alpha = 1, standardize=TRUE)
+      
+      lambdaVec[i] <- lassoreg$lambda.min
+      
+      adjMat[1:k,i] <- coef(lassoreg, s = lambdaVec[i], exact = FALSE)[2:(k+1)]
     }
     
-    AdjMatList[[i]] <- adjMat
-    lambdaList[[i]] <- lambdaVec
+    AdjMatList[[t]] <- adjMat
+    lambdaList[[t]] <- lambdaVec
   }
   return(list(B = AdjMatList, lambdas = lambdaList))
 }
 
-designMat <- matrix(colnames(baseline_data),
-                    nrow = 31,
-                    ncol = 3,
-                    byrow = FALSE)
+getLavaanSyntax <- function(designMat, model = NULL){
+  
+  k <- nrow(designMat)
+  
+  regressions <- ""
+  resVariances <- ""
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    
+    for (i in 1:k){
+      
+      predictors <- designMat[, t]
+      
+      if(!is.null(model)){
+        
+        predictors <- predictors[which(model[[t]][,i] != 0 )]
+        
+      }
+      
+      #regress variable on variables at the previous time point
+      regressions <- paste(regressions, paste(designMat[i,(t+1)], "~", sep = ""), 
+                           paste(predictors, collapse = "+"), "\n")
+      
+      resVariances <- paste(resVariances, paste(designMat[i,(t+1)], "~~", paste(designMat[(i : k), (t+1)], collapse = "+"), sep = ""), "\n")
+    }
+  }
+  
+  
+  return(c(regressions, resVariances))
+}
 
-glmModel <- getAdjMatList(designMat, baseline_data)
+CreateSigB <- function(B, nonSigParam){
+  
+  sigB <- B
+  
+  if(nrow(nonSigParam) == 0){
+    return(B)
+  }else{
+    for(i in 1: nrow(nonSigParam)){
+      sigB[nonSigParam$rhs[i], nonSigParam$lhs[i]] <- 0
+      
+    }
+    
+    return(sigB)
+  }
+}
 
+CreateSeparateB <- function(B, designMat){
+  
+  BList <- NULL
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    k <- nrow(designMat)
+    
+    outcomes <- designMat[, (t + 1)]
+    
+    predictors <- designMat[, t]
+    
+    BList[[t]] <- B[predictors, outcomes]
+    
+  }
+  
+  return(BList)
+}
+
+myfulldata <- baseline_data[complete.cases(baseline_data),]
+
+designMat <- matrix(colnames(myfulldata), )
 ```
+
 
 ## Test Network
 ```{r}
@@ -112,4 +178,148 @@ draw_graph <- function(df) {
 draw_graph(baseline_data)
 draw_graph(year2_FU)
 draw_graph(year4_FU)
+
+type = rep('g', 31) # Treating as quasi-continuous
+level = rep(1, 31)
+
+baseline_matrix = data.matrix(baseline_data)
+baseline_network = mgm(data = baseline_matrix,
+                       type = type,
+                       level = level,
+                       k = 2,
+                       lambdaSel = 'EBIC',
+                       lambdaGam = 0.5,
+                       ruleReg = 'AND',
+                       pbar = FALSE)
+
+year2_matrix = data.matrix(year2_FU)
+year2_network = mgm(data = year2_matrix,
+                    type = type,
+                    level = level,
+                    k = 2,
+                    lambdaSel = 'EBIC',
+                    lambdaGam = 0.5,
+                    ruleReg = 'AND',
+                    pbar = FALSE)
+
+year4_matrix = data.matrix(year4_FU)
+year4_network = mgm(data = year4_matrix,
+                    type = type,
+                    level = level,
+                    k = 2,
+                    lambdaSel = 'EBIC',
+                    lambdaGam = 0.5,
+                    ruleReg = 'AND',
+                    pbar = FALSE)
+
+baseline_predict = predict(object = baseline_network,
+                           data = baseline_matrix,
+                           errorCon = 'R2',
+                           errorCat = 'CC')$error
+
+year2_predict = predict(object = year2_network,
+                           data = year2_matrix,
+                           errorCon = 'R2',
+                           errorCat = 'CC')$error
+
+year4_predict = predict(object = year4_network,
+                           data = year4_matrix,
+                           errorCon = 'R2',
+                           errorCat = 'CC')$error
+
+baseline_predict$R2_CC = ifelse(!is.na(baseline_predict$R2), baseline_predict$R2, baseline_predict$CC)
+year2_predict$R2_CC = ifelse(!is.na(year2_predict$R2), year2_predict$R2, year2_predict$CC)
+year4_predict$R2_CC = ifelse(!is.na(year4_predict$R2), year4_predict$R2, year4_predict$CC)
+
+p_baseline = qgraph(baseline_network$pairwise$wadj,
+             vsize = 8,
+             layout = "spring",
+              pie = baseline_predict$R2_CC,
+             edge.width = 1.5,
+             edge.color = baseline_network$pairwise$edgecolor, 
+             labels = colnames(baseline_data),
+             palette = "pastel",
+             GLratio = 2,
+             legend.cex = .35)
+
+p_year2 = qgraph(year2_network$pairwise$wadj,
+             vsize = 8,
+             layout = "spring",
+              pie = year2_predict$R2_CC,
+             edge.width = 1.5,
+             edge.color = year2_network$pairwise$edgecolor, 
+             labels = colnames(year2_matrix),
+             palette = "pastel",
+             GLratio = 2,
+             legend.cex = .35)
+
+p_year4 = qgraph(year4_network$pairwise$wadj,
+             vsize = 8,
+             layout = "spring",
+              pie = year4_predict$R2_CC,
+             edge.width = 1.5,
+             edge.color = year4_network$pairwise$edgecolor, 
+             labels = colnames(year4_matrix),
+             palette = "pastel",
+             GLratio = 2,
+             legend.cex = .35)
+
+## Cross-lagged
+baseline_data_summed <- baseline_data %>%
+  rowwise() %>%
+  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
+  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
+
+year2_FU_summed <- year2_FU %>%
+  rowwise() %>%
+  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
+  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
+
+k = 8
+adjMat = matrix(0, k, k)
+rsquare = rep(0, k)
+
+baseline_matrix_summed <- data.matrix(baseline_data_summed)
+year2_matrix_summed <- data.matrix(year2_FU_summed)
+colnames(baseline_matrix_summed) <- paste0(colnames(baseline_matrix_summed), '.1')
+colnames(year2_matrix_summed) <- paste0(colnames(year2_matrix_summed), '.2')
+baseline_year2_combined_matrix <- cbind(baseline_matrix_summed, year2_matrix_summed)
+
+for (i in 1:k) {
+  set.seed(222)
+  lassoreg = cv.glmnet(as.matrix(baseline_year2_combined_matrix[,1:k]), as.matrix(baseline_year2_combined_matrix[,(k+1)]),
+                                 family = 'gaussian',
+                                 alpha = 1,
+                                 standardize = TRUE)
+  lambda = lassoreg$lambda.min
+  rsquare[i] = lassoreg$glmnet.fit$dev.ratio[which(lassoreg$lambda == lambda)]
+  adjMat[1:k, i] = coef(lassoreg, s = lambda, exact = FALSE)[2: (k+1)]
+}
+
+# Plot
+groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
+labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+
+# diag(adjMat) = 0
+
+test_fig = qgraph(adjMat, 
+                vsize = 8,
+                layout = 'circular',
+                edge.width = 1.5,
+                pie = rsquare,
+                fade = TRUE,
+                labels = labels,
+                groups = groups,
+                legend = TRUE,
+                # nodeNames = node_names,
+                palette = "pastel",
+                GLratio = 2.5,
+                edge.labels = TRUE)
+
+centrality(test_fig)
+centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
+
 ```
