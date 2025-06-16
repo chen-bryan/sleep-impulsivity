@@ -35,10 +35,28 @@ load('/Users/bryanchen/Desktop/Med School/Pre-Clerkships/Research/ABCD/processed
 
 ## Longitudinal Network
 ```{r}
-type = rep('g', 31) # Treating as quasi-continuous
-level = rep(1, 31)
+baseline_data_summed <- baseline_data %>%
+  rowwise() %>%
+  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
+  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
 
-baseline_matrix = data.matrix(baseline_data)
+year2_FU_summed <- year2_FU %>%
+  rowwise() %>%
+  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
+  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
+
+year4_FU_summed <- year4_FU %>%
+  rowwise() %>%
+  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
+  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
+  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
+
+type = rep('g', 8) # Treating as quasi-continuous
+level = rep(1, 8)
+
+baseline_matrix = data.matrix(baseline_data_summed)
 baseline_network = mgm(data = baseline_matrix,
                        type = type,
                        level = level,
@@ -48,7 +66,7 @@ baseline_network = mgm(data = baseline_matrix,
                        ruleReg = 'AND',
                        pbar = FALSE)
 
-year2_matrix = data.matrix(year2_FU)
+year2_matrix = data.matrix(year2_FU_summed)
 year2_network = mgm(data = year2_matrix,
                     type = type,
                     level = level,
@@ -58,7 +76,7 @@ year2_network = mgm(data = year2_matrix,
                     ruleReg = 'AND',
                     pbar = FALSE)
 
-year4_matrix = data.matrix(year4_FU)
+year4_matrix = data.matrix(year4_FU_summed)
 year4_network = mgm(data = year4_matrix,
                     type = type,
                     level = level,
@@ -87,16 +105,19 @@ baseline_predict$R2_CC = ifelse(!is.na(baseline_predict$R2), baseline_predict$R2
 year2_predict$R2_CC = ifelse(!is.na(year2_predict$R2), year2_predict$R2, year2_predict$CC)
 year4_predict$R2_CC = ifelse(!is.na(year4_predict$R2), year4_predict$R2, year4_predict$CC)
 
+groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
 p_baseline = qgraph(baseline_network$pairwise$wadj,
              vsize = 8,
              layout = "spring",
               pie = baseline_predict$R2_CC,
              edge.width = 1.5,
              edge.color = baseline_network$pairwise$edgecolor, 
-             labels = colnames(baseline_data),
+             labels = colnames(baseline_data_summed),
              palette = "pastel",
              GLratio = 2,
-             legend.cex = .35)
+             legend.cex = .35,
+             edge.labels = TRUE,
+             groups = groups)
 
 p_year2 = qgraph(year2_network$pairwise$wadj,
              vsize = 8,
@@ -107,7 +128,9 @@ p_year2 = qgraph(year2_network$pairwise$wadj,
              labels = colnames(year2_matrix),
              palette = "pastel",
              GLratio = 2,
-             legend.cex = .35)
+             legend.cex = .35,
+             edge.labels = TRUE,
+             groups = groups)
 
 p_year4 = qgraph(year4_network$pairwise$wadj,
              vsize = 8,
@@ -118,21 +141,13 @@ p_year4 = qgraph(year4_network$pairwise$wadj,
              labels = colnames(year4_matrix),
              palette = "pastel",
              GLratio = 2,
-             legend.cex = .35)
+             legend.cex = .35,
+             edge.labels = TRUE,
+             groups = groups)
 
 ## Cross-lagged
-baseline_data_summed <- baseline_data %>%
-  rowwise() %>%
-  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
-  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration, ends_with('_sum'))
 
-year2_FU_summed <- year2_FU %>%
-  rowwise() %>%
-  mutate(sleep_initiation_sum = sum(c_across(ends_with('_i')))) %>%
-  mutate(sleep_maintenance_sum = sum(c_across(ends_with('_m')))) %>%
-  select(negative_urgency, lack_of_planning, sensation_seeking, positive_urgency, lack_of_perseverance, duration,  ends_with('_sum'))
-
+### T1 -> T2
 k = 8
 adjMat = matrix(0, k, k)
 rsquare = rep(0, k)
@@ -178,4 +193,49 @@ test_fig = qgraph(adjMat,
 centrality(test_fig)
 centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
 
+### T2 -> T3
+k = 8
+adjMat = matrix(0, k, k)
+rsquare = rep(0, k)
+
+year2_matrix_summed <- data.matrix(year2_FU_summed)
+year4_matrix_summed <- data.matrix(year4_FU_summed)
+colnames(year2_matrix_summed) <- paste0(colnames(year2_matrix_summed), '.2')
+colnames(year4_matrix_summed) <- paste0(colnames(year4_matrix_summed), '.3')
+year2_year4_combined_matrix <- cbind(year2_matrix_summed, year4_matrix_summed)
+
+for (i in 1:k) {
+  set.seed(222)
+  lassoreg = cv.glmnet(as.matrix(year2_year4_combined_matrix[,1:k]), as.matrix(year2_year4_combined_matrix[,(k+1)]),
+                                 family = 'gaussian',
+                                 alpha = 1,
+                                 standardize = TRUE)
+  lambda = lassoreg$lambda.min
+  rsquare[i] = lassoreg$glmnet.fit$dev.ratio[which(lassoreg$lambda == lambda)]
+  adjMat[1:k, i] = coef(lassoreg, s = lambda, exact = FALSE)[2: (k+1)]
+}
+
+# Plot
+groups = append(rep('UPPS', 5), rep('SIPS', 3)) %>% factor
+labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'sleep_initiation_sum', 'sleep_maintenance_sum')
+
+# diag(adjMat) = 0
+
+test_fig = qgraph(adjMat, 
+                vsize = 8,
+                layout = 'circular',
+                edge.width = 1.5,
+                pie = rsquare,
+                fade = TRUE,
+                labels = labels,
+                groups = groups,
+                legend = TRUE,
+                # nodeNames = node_names,
+                palette = "pastel",
+                GLratio = 2.5,
+                edge.labels = TRUE)
+
+centrality(test_fig)
+centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
 ```
