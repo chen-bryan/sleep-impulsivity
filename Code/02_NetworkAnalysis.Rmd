@@ -42,6 +42,7 @@ sleep_baseline_data <- baseline_data[, 7:ncol(baseline_data)]
 fa.parallel(sleep_baseline_data, fm = "minres", fa = "fa")
 efa_result <- fa(sleep_baseline_data, nfactors = 8, rotate = "oblimin", fm = "minres")
 print(efa_result$loadings, cutoff = 0.3)
+diagram(efa_result, sort = TRUE, cut = 0.3, cex = 0.5)
 
 efa_result <- fa(sleep_baseline_data, nfactors = 7, rotate = "oblimin", fm = "minres")
 print(efa_result$loadings, cutoff = 0.3)
@@ -96,9 +97,6 @@ fitMeasures(fit_6f, c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr"))
 
 # Compare fit (only valid for nested models)
 lavTestLRT(fit_7f, fit_6f)
-
-diagram(efa_result, sort = TRUE, cut = 0.3, cex = 0.5)
-diagram(efa_result, sort = TRUE, cut = 0.3, cex = 1)
 ```
 
 ## Longitudinal Network
@@ -306,6 +304,169 @@ test_fig = qgraph(adjMat,
                 palette = "pastel",
                 GLratio = 2.5,
                 edge.labels = TRUE)
+
+centrality(test_fig)
+centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
+```
+
+
+``` {r} 
+getAdjMatList <- function(designMat, data){
+  AdjMatList <- NULL
+  lambdaList <- NULL
+  k <- nrow(designMat)
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    predictors <- as.matrix(data[, designMat[, t]])
+    
+    adjMat <- matrix(0, k, k)
+    colnames(adjMat) <- designMat[, (t+1)]
+    rownames(adjMat) <- colnames(predictors)
+    
+    lambdaVec <- rep(0,k)
+      
+    for (i in 1:k){
+      
+      set.seed(100)
+      lassoreg <- cv.glmnet(x = predictors, 
+                            y = data[, designMat[i , t+1 ]], 
+                            family = "gaussian", alpha = 1, standardize=TRUE)
+      
+      lambdaVec[i] <- lassoreg$lambda.min
+      
+      adjMat[1:k,i] <- coef(lassoreg, s = lambdaVec[i], exact = FALSE)[2:(k+1)]
+    }
+    
+    AdjMatList[[t]] <- adjMat
+    lambdaList[[t]] <- lambdaVec
+  }
+  return(list(B = AdjMatList, lambdas = lambdaList))
+}
+
+getLavaanSyntax <- function(designMat, model = NULL){
+  
+  k <- nrow(designMat)
+  
+  regressions <- ""
+  resVariances <- ""
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    
+    for (i in 1:k){
+      
+      predictors <- designMat[, t]
+      
+      if(!is.null(model)){
+        
+        predictors <- predictors[which(model[[t]][,i] != 0 )]
+        
+      }
+      
+      #regress variable on variables at the previous time point
+      regressions <- paste(regressions, paste(designMat[i,(t+1)], "~", sep = ""), 
+                           paste(predictors, collapse = "+"), "\n")
+      
+      resVariances <- paste(resVariances, paste(designMat[i,(t+1)], "~~", paste(designMat[(i : k), (t+1)], collapse = "+"), sep = ""), "\n")
+    }
+  }
+  
+  
+  return(c(regressions, resVariances))
+}
+
+CreateSigB <- function(B, nonSigParam){
+  
+  sigB <- B
+  
+  if(nrow(nonSigParam) == 0){
+    return(B)
+  }else{
+    for(i in 1: nrow(nonSigParam)){
+      sigB[nonSigParam$rhs[i], nonSigParam$lhs[i]] <- 0
+      
+    }
+    
+    return(sigB)
+  }
+}
+
+CreateSeparateB <- function(B, designMat){
+  
+  BList <- NULL
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    k <- nrow(designMat)
+    
+    outcomes <- designMat[, (t + 1)]
+    
+    predictors <- designMat[, t]
+    
+    BList[[t]] <- B[predictors, outcomes]
+    
+  }
+  
+  return(BList)
+}
+
+baseline_matrix_summed <- data.matrix(baseline_data_summed)
+year2_matrix_summed <- data.matrix(year2_FU_summed)
+year4_matrix_summed <- data.matrix(year4_FU_summed)
+colnames(baseline_matrix_summed) <- paste0(colnames(baseline_matrix_summed), '.1')
+colnames(year2_matrix_summed) <- paste0(colnames(year2_matrix_summed), '.2')
+colnames(year4_matrix_summed) <- paste0(colnames(year4_matrix_summed), '.3')
+baseline_year2_combined_matrix <- cbind(baseline_matrix_summed, year2_matrix_summed)
+full_matrix <- cbind(baseline_year2_combined_matrix, year4_matrix_summed)
+
+designMat <- matrix(colnames(full_matrix), nrow = 8, ncol = 3, byrow = FALSE)
+
+
+glmModel <- getAdjMatList(designMat = designMat , data = full_matrix)
+
+groups = append(rep('UPPS', 5), rep('SDSC', 3)) %>% factor
+labels = c('negative_urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
+node_names = c('Negative Urgency', 'lack_of_planning', 'sensation_seeking', 'positive_urgency', 'lack_of_perseverance', 'duration', 'DIS', 'DMS')
+
+adjMat <- glmModel[['B']][[1]]
+diag(adjMat) = 0
+
+test_fig = qgraph(adjMat,
+                vsize = 8,
+                layout = 'spring',
+                edge.width = 1.5,
+                pie = rsquare,
+                fade = TRUE,
+                labels = labels,
+                groups = groups,
+                legend = TRUE,
+                # nodeNames = node_names,
+                palette = "pastel",
+                GLratio = 2.5,
+                edge.labels = TRUE,
+                title = 'T1 -> T2')
+
+centrality(test_fig)
+centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
+
+adjMat <- glmModel[['B']][[2]]
+diag(adjMat) = 0
+
+test_fig = qgraph(adjMat,
+                vsize = 8,
+                layout = 'spring',
+                edge.width = 1.5,
+                pie = rsquare,
+                fade = TRUE,
+                labels = labels,
+                groups = groups,
+                legend = TRUE,
+                # nodeNames = node_names,
+                palette = "pastel",
+                GLratio = 2.5,
+                edge.labels = TRUE,
+                title = 'T2 -> T3')
 
 centrality(test_fig)
 centralityPlot(test_fig, include = 'all', orderBy = 'OutExpectedInfluence')
